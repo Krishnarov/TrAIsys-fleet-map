@@ -7,7 +7,8 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:5050',
+        // target: 'http://localhost:5050',
+        target: 'https://tr-a-isys-fleet-map.vercel.app',
         changeOrigin: true,
       },
     },
