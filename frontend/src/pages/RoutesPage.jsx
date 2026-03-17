@@ -141,14 +141,20 @@ export default function RoutesPage() {
             const stopsInOrder = form.stops.map(rs => allStops.find(s => s._id === rs.stop)).filter(Boolean)
             const coords = stopsInOrder.map(s => `${s.location.lng},${s.location.lat}`).join(';')
             
-            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson`
+            const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=simplified&geometries=geojson`
             const resp = await fetch(url)
             const data = await resp.json()
             
             if (data.code !== 'Ok') throw new Error('OSRM Error: ' + data.code)
             
             const route = data.routes[0]
-            const newPath = route.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }))
+            let newPath = route.geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }))
+            
+            // Safety cap: if still too many points, downsample to avoid Vercel 4.5MB limit
+            if (newPath.length > 800) {
+                const step = Math.ceil(newPath.length / 800);
+                newPath = newPath.filter((_, i) => i % step === 0 || i === newPath.length - 1);
+            }
             
             setForm(p => ({
                 ...p,

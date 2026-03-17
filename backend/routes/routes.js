@@ -5,12 +5,13 @@ const Route = require('../models/Route');
 // GET all routes
 router.get('/', async (req, res) => {
     try {
-        const { isActive } = req.query;
+        const { isActive, city } = req.query;
         const filter = {};
         if (isActive !== undefined) filter.isActive = isActive === 'true';
+        if (city) filter.cities = city;
 
         const routes = await Route.find(filter)
-            .populate('stops.stop', 'name code location address')
+            .populate('stops.stop', 'name code location address city')
             .sort({ routeNumber: 1 });
 
         res.json({ success: true, count: routes.length, data: routes });

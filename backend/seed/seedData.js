@@ -10,18 +10,22 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/traisys_fl
 
 // Lucknow real bus stops with coordinates
 const stopsData = [
-    { name: 'Charbagh Railway Station', code: 'CHB', location: { lat: 26.8402, lng: 80.9198 }, address: 'Charbagh, Lucknow' },
-    { name: 'Hazratganj', code: 'HZG', location: { lat: 26.8557, lng: 80.9466 }, address: 'Hazratganj, Lucknow' },
-    { name: 'Aminabad', code: 'AMB', location: { lat: 26.8489, lng: 80.9329 }, address: 'Aminabad, Lucknow' },
-    { name: 'Alambagh Bus Terminal', code: 'ALB', location: { lat: 26.8145, lng: 80.9003 }, address: 'Alambagh, Lucknow' },
-    { name: 'Gomti Nagar', code: 'GMN', location: { lat: 26.8520, lng: 81.0100 }, address: 'Gomti Nagar, Lucknow' },
-    { name: 'Amausi Airport', code: 'AMA', location: { lat: 26.7600, lng: 80.8893 }, address: 'Amausi, Lucknow' },
-    { name: 'Indira Nagar', code: 'IDN', location: { lat: 26.8840, lng: 80.9983 }, address: 'Indira Nagar, Lucknow' },
-    { name: 'Chinhat', code: 'CHT', location: { lat: 26.8670, lng: 81.0560 }, address: 'Chinhat, Lucknow' },
-    { name: 'IT City Chauraha', code: 'ITC', location: { lat: 26.8472, lng: 81.0287 }, address: 'IT City, Lucknow' },
-    { name: 'Vikas Nagar', code: 'VKN', location: { lat: 26.8967, lng: 80.9716 }, address: 'Vikas Nagar, Lucknow' },
-    { name: 'SGPGI Hospital', code: 'SGP', location: { lat: 26.8143, lng: 80.9936 }, address: 'Raebareli Rd, Lucknow' },
-    { name: 'Mahanagar', code: 'MNG', location: { lat: 26.8734, lng: 80.9698 }, address: 'Mahanagar, Lucknow' },
+    { name: 'Charbagh Railway Station', code: 'CHB', location: { lat: 26.8402, lng: 80.9198 }, address: 'Charbagh, Lucknow', city: 'Lucknow' },
+    { name: 'Hazratganj', code: 'HZG', location: { lat: 26.8557, lng: 80.9466 }, address: 'Hazratganj, Lucknow', city: 'Lucknow' },
+    { name: 'Aminabad', code: 'AMB', location: { lat: 26.8489, lng: 80.9329 }, address: 'Aminabad, Lucknow', city: 'Lucknow' },
+    { name: 'Alambagh Bus Terminal', code: 'ALB', location: { lat: 26.8145, lng: 80.9003 }, address: 'Alambagh, Lucknow', city: 'Lucknow' },
+    { name: 'Gomti Nagar', code: 'GMN', location: { lat: 26.8520, lng: 81.0100 }, address: 'Gomti Nagar, Lucknow', city: 'Lucknow' },
+    { name: 'Amausi Airport', code: 'AMA', location: { lat: 26.7600, lng: 80.8893 }, address: 'Amausi, Lucknow', city: 'Lucknow' },
+    { name: 'Indira Nagar', code: 'IDN', location: { lat: 26.8840, lng: 80.9983 }, address: 'Indira Nagar, Lucknow', city: 'Lucknow' },
+    { name: 'Chinhat', code: 'CHT', location: { lat: 26.8670, lng: 81.0560 }, address: 'Chinhat, Lucknow', city: 'Lucknow' },
+    { name: 'IT City Chauraha', code: 'ITC', location: { lat: 26.8472, lng: 81.0287 }, address: 'IT City, Lucknow', city: 'Lucknow' },
+    { name: 'Vikas Nagar', code: 'VKN', location: { lat: 26.8967, lng: 80.9716 }, address: 'Vikas Nagar, Lucknow', city: 'Lucknow' },
+    { name: 'SGPGI Hospital', code: 'SGP', location: { lat: 26.8143, lng: 80.9936 }, address: 'Raebareli Rd, Lucknow', city: 'Lucknow' },
+    { name: 'Mahanagar', code: 'MNG', location: { lat: 26.8734, lng: 80.9698 }, address: 'Mahanagar, Lucknow', city: 'Lucknow' },
+    // Bareilly Stops
+    { name: 'Choupla', code: 'CHP', location: { lat: 28.3670, lng: 79.4304 }, address: 'Choupla XING, Bareilly', city: 'Bareilly' },
+    { name: 'Satellite Bus Stand', code: 'SAT', location: { lat: 28.3520, lng: 79.4520 }, address: 'Satellite, Bareilly', city: 'Bareilly' },
+    { name: 'Invertis University', code: 'INV', location: { lat: 28.2705, lng: 79.4552 }, address: 'Invertis, Bareilly', city: 'Bareilly' },
 ];
 
 const driversData = [
@@ -57,6 +61,7 @@ async function seedDatabase() {
             {
                 name: 'Alambagh - Hazratganj - Gomti Nagar',
                 routeNumber: 'LKO-01',
+                cities: ['Lucknow'],
                 color: '#1D9E75',
                 distance: 18.5,
                 estimatedDuration: 55,
@@ -87,6 +92,7 @@ async function seedDatabase() {
             {
                 name: 'Charbagh - Indira Nagar - Chinhat',
                 routeNumber: 'LKO-02',
+                cities: ['Lucknow'],
                 color: '#1565C0',
                 distance: 22.0,
                 estimatedDuration: 65,
@@ -114,6 +120,7 @@ async function seedDatabase() {
             {
                 name: 'Amausi - Alambagh - SGPGI',
                 routeNumber: 'LKO-03',
+                cities: ['Lucknow'],
                 color: '#E65100',
                 distance: 16.0,
                 estimatedDuration: 50,
@@ -135,6 +142,46 @@ async function seedDatabase() {
                     { lat: 26.8300, lng: 80.9600 },
                     { lat: 26.8200, lng: 80.9770 },
                     { lat: 26.8143, lng: 80.9936 },
+                ],
+            },
+            {
+                name: 'Choupla - Satellite - Invertis',
+                routeNumber: 'BLY-01',
+                cities: ['Bareilly'],
+                color: '#9C27B0',
+                distance: 12.0,
+                estimatedDuration: 40,
+                frequency: 20,
+                stops: [
+                    { stop: stopMap['CHP'], sequence: 1, arrivalOffset: 0 },
+                    { stop: stopMap['SAT'], sequence: 2, arrivalOffset: 15 },
+                    { stop: stopMap['INV'], sequence: 3, arrivalOffset: 40 },
+                ],
+                path: [
+                    { lat: 28.3670, lng: 79.4304 },
+                    { lat: 28.3600, lng: 79.4400 },
+                    { lat: 28.3520, lng: 79.4520 },
+                    { lat: 28.3000, lng: 79.4530 },
+                    { lat: 28.2705, lng: 79.4552 },
+                ],
+            },
+            {
+                name: 'Lucknow to Bareilly Intercity',
+                routeNumber: 'UP-INTER-01',
+                cities: ['Lucknow', 'Bareilly'],
+                color: '#D81B60',
+                distance: 250.0,
+                estimatedDuration: 300,
+                frequency: 180,
+                stops: [
+                    { stop: stopMap['ALB'], sequence: 1, arrivalOffset: 0 }, // starts alambagh lucknow
+                    { stop: stopMap['CHP'], sequence: 2, arrivalOffset: 300 }, // ends in bareilly choupla
+                ],
+                path: [
+                    { lat: 26.8145, lng: 80.9003 }, // Lko
+                    { lat: 27.2000, lng: 80.5000 },
+                    { lat: 27.8000, lng: 80.0000 },
+                    { lat: 28.3670, lng: 79.4304 }, // Bareilly
                 ],
             },
         ];
@@ -208,9 +255,25 @@ async function seedDatabase() {
                 fuelType: 'electric',
                 manufactureYear: 2023,
                 odometer: 8400,
-                assignedRoute: routes[2]._id,
+                assignedRoute: routes[3]._id, // Bareilly Route
                 assignedDriver: drivers[2]._id,
-                currentLocation: { lat: 26.8145, lng: 80.9003, speed: 0, heading: 0, lastUpdated: new Date() },
+                currentLocation: { lat: 28.3600, lng: 79.4400, speed: 0, heading: 0, lastUpdated: new Date() },
+            },
+            {
+                busNumber: 'UP-EV-008',
+                registrationNumber: 'UP32-EV-1008',
+                model: 'Olectra K9',
+                manufacturer: 'Olectra',
+                capacity: 40,
+                type: 'ac',
+                status: 'active',
+                isAC: true,
+                fuelType: 'electric',
+                manufactureYear: 2024,
+                odometer: 1400,
+                assignedRoute: routes[4]._id, // Intercity Route
+                assignedDriver: drivers[4]._id,
+                currentLocation: { lat: 27.2000, lng: 80.5000, speed: 0, heading: 0, lastUpdated: new Date() },
             },
             {
                 busNumber: 'LKO-BUS-005',

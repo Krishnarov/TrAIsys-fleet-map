@@ -4,10 +4,18 @@ import {
     MapContainer, TileLayer, Polyline,
     CircleMarker, Marker, Popup, useMap, Circle, Tooltip
 } from 'react-leaflet'
+import { io } from 'socket.io-client'
 import L from 'leaflet'
 import { routeAPI, busAPI } from '../../api'
 import { BusSimulator, distanceM, posAtDist } from '../../utils/busSimulator'
-import { RefreshCw, Clock, Navigation } from 'lucide-react'
+import { RefreshCw, Clock, Navigation, ChevronDown, ChevronUp } from 'lucide-react'
+
+// Initialize socket outside component to prevent multiple connections
+const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5050', {
+    transports: ['websocket', 'polling'], // allow fallback
+    autoConnect: true,
+    path: '/socket.io'
+});
 
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
@@ -63,10 +71,13 @@ function formatClockTime(secOffset, customBaseTime) {
 // ── ETA sidebar panel ─────────────────────────────────────────
 function ETAPanel({ buses, routes }) {
     const [selBus, setSelBus] = useState(null)
+    const [minimized, setMinimized] = useState(false)
 
     useEffect(() => {
-        if (buses.length && !selBus) setSelBus(buses[0].busId)
-    }, [buses])
+        if (buses.length > 0 && !selBus) {
+            setSelBus(buses[0].busId)
+        }
+    }, [buses, selBus])
 
     const busState = buses.find(b => b.busId === selBus)
     const routeInfo = routes.find(r => r.buses?.some(b => b.busId === selBus))
@@ -98,25 +109,43 @@ function ETAPanel({ buses, routes }) {
             borderRadius: 10, width: 230,
             overflow: 'hidden',
             boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+            maxHeight: minimized ? '40px' : '85vh',
+            transition: 'max-height 0.3s ease-in-out'
         }}>
             {/* Header */}
-            <div style={{ padding: '10px 14px', borderBottom: '1px solid #2A3347', background: '#0D1117' }}>
-                <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 600, marginBottom: 6 }}>
+            <div style={{ 
+                padding: '10px 14px', 
+                borderBottom: minimized ? 'none' : '1px solid #2A3347', 
+                background: '#0D1117',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                cursor: 'pointer'
+            }} onClick={() => setMinimized(!minimized)}>
+                <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.8px', fontWeight: 700 }}>
                     Select Bus
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {buses.map(b => (
-                        <button key={b.busId} onClick={() => setSelBus(b.busId)} style={{
-                            padding: '4px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                            background: selBus === b.busId ? b.color : '#2A3347',
-                            color: selBus === b.busId ? '#fff' : '#8B9AB0',
-                            transition: 'all 0.15s',
-                        }}>{b.busNumber}</button>
-                    ))}
+                <div style={{ color: '#4A5568', display: 'flex', alignItems: 'center' }}>
+                    {minimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
                 </div>
             </div>
 
-            {busState && (
+            {!minimized && (
+                <div style={{ padding: '10px 14px', borderBottom: '1px solid #2A3347' }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {buses.map(b => (
+                            <button key={b.busId} onClick={(e) => { e.stopPropagation(); setSelBus(b.busId) }} style={{
+                                padding: '4px 9px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                                background: selBus === b.busId ? b.color : '#2A3347',
+                                color: selBus === b.busId ? '#fff' : '#8B9AB0',
+                                transition: 'all 0.15s',
+                            }}>{b.busNumber}</button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {!minimized && busState && (
                 <>
                     {/* Bus status */}
                     <div style={{ padding: '10px 14px', borderBottom: '1px solid #2A3347' }}>
@@ -221,13 +250,18 @@ export default function FleetMap({ height = '500px' }) {
     const [routes, setRoutes] = useState([])
     const [busStates, setBusStates] = useState([])  // live sim data per bus
     const [loading, setLoading] = useState(true)
-    const [layers, setLayers] = useState({ routes: true, stops: true, buses: true, geofence: true, satellite: false, perspective: false })
+    const [layers, setLayers] = useState({ routes: true, stops: true, buses: true, geofence: true, signals: true, satellite: false })
+    const [layersMinimized, setLayersMinimized] = useState(false)
+    const [selectedCity, setSelectedCity] = useState('Lucknow')
+    const [availableCities, setAvailableCities] = useState(['Lucknow'])
     const [logModal, setLogModal] = useState(null) // busId
     const [logs, setLogs] = useState([])
     const [logsLoading, setLogsLoading] = useState(false)
     const [globalSpeed, setGlobalSpeed] = useState(30)
+    const [simRunning, setSimRunning] = useState(true)
     const speedRef = useRef(30)
     const simsRef = useRef([])  // BusSimulator instances
+    const latestStatesRef = useRef({}) // Batched state ref to prevent infinite re-rendering
 
     const handleSpeedChange = (e) => {
         const speed = Number(e.target.value)
@@ -246,20 +280,31 @@ export default function FleetMap({ height = '500px' }) {
 
             const loadedRoutes = rResp.data || []
             const loadedBuses = bResp.data || []
-            setRoutes(loadedRoutes)
+            
+            // Extract unique cities from routes
+            const cities = new Set()
+            loadedRoutes.forEach(r => {
+                if (r.cities) r.cities.forEach(c => cities.add(c))
+            })
+            if (cities.size > 0) setAvailableCities(Array.from(cities))
+
+            // Filter routes to selected city
+            const cityRoutes = loadedRoutes.filter(r => r.cities?.includes(selectedCity))
+            setRoutes(cityRoutes)
 
             // Stop old simulators
             simsRef.current.forEach(s => s.stop())
             simsRef.current = []
+            latestStatesRef.current = {} // clear previous states
 
             const initialStates = []
 
-            // Find buses that have a route assigned
+            // Find buses that have a route assigned in the current city
             loadedBuses.forEach((bus, bi) => {
                 const assignedRouteId = bus.assignedRoute?._id || bus.assignedRoute
                 if (!assignedRouteId) return
 
-                const route = loadedRoutes.find(r => r._id === assignedRouteId)
+                const route = cityRoutes.find(r => r._id === assignedRouteId)
                 if (!route || !route.path?.length || !route.stops?.length) return
 
                 // Spread out buses on the same route by giving them different offsets
@@ -274,26 +319,38 @@ export default function FleetMap({ height = '500px' }) {
                     speedKph: speedRef.current,
                     startOffset: offset,
                     onUpdate: (state) => {
-                        setBusStates(prev => {
-                            const idx = prev.findIndex(b => b.busId === bus._id)
-                            const newState = {
-                                ...state,
-                                busId: bus._id,
-                                busNumber: bus.busNumber,
-                                color: route.color,
-                                routeNumber: route.routeNumber,
-                                routeId: route._id,
-                                startTime: sim.startTime,
-                            }
+                        const newState = {
+                            ...state,
+                            busId: bus._id,
+                            busNumber: bus.busNumber,
+                            color: route.color,
+                            routeNumber: route.routeNumber,
+                            routeId: route._id,
+                            startTime: sim.startTime,
+                        }
 
-                            // Sync with backend for logging (throttled every 5 ticks to avoid spam)
-                            if (window._syncTicks === undefined) window._syncTicks = {}
-                            if (!window._syncTicks[bus._id]) window._syncTicks[bus._id] = 0
-                            window._syncTicks[bus._id]++
+                        latestStatesRef.current[bus._id] = newState
 
-                            if (window._syncTicks[bus._id] % 5 === 0 || state.isAtRedSignal) {
-                                const currentSignal = state.signals?.find(s => s.state === 'red' && Math.abs(s.dist - state.progress * sim.totalDist) < 30);
-                                
+                        // Sync with backend for logging (throttled every 50 ticks to avoid API spam)
+                        if (window._syncTicks === undefined) window._syncTicks = {}
+                        if (!window._syncTicks[bus._id]) window._syncTicks[bus._id] = 0
+                        window._syncTicks[bus._id]++
+
+                        if (window._syncTicks[bus._id] % 50 === 0 || state.isAtRedSignal) {
+                            const currentSignal = state.signals?.find(s => s.state === 'red' && Math.abs(s.dist - state.progress * sim.totalDist) < 30);
+                            
+                            if (socket.connected) {
+                                socket.emit('bus-location-update', {
+                                    busId: bus._id,
+                                    lat: state.position.lat,
+                                    lng: state.position.lng,
+                                    speed: state.speedKph,
+                                    heading: state.heading,
+                                    isAtRedSignal: state.isAtRedSignal,
+                                    signalId: currentSignal?.id || (state.isAtRedSignal ? 'active-signal' : null)
+                                });
+                            } else {
+                                // Fallback to REST API if socket is down/not supported (e.g., Vercel)
                                 busAPI.updateLocation(bus._id, {
                                     lat: state.position.lat,
                                     lng: state.position.lng,
@@ -301,18 +358,15 @@ export default function FleetMap({ height = '500px' }) {
                                     heading: state.heading,
                                     isAtRedSignal: state.isAtRedSignal,
                                     signalId: currentSignal?.id || (state.isAtRedSignal ? 'active-signal' : null)
-                                }).catch(e => console.warn('Sync err:', e))
+                                }).catch(e => console.warn('Sync err (REST fallback):', e))
                             }
-
-                            if (idx === -1) return [...prev, newState]
-                            const next = [...prev]
-                            next[idx] = newState
-                            return next
-                        })
+                        }
                     }
                 })
                 simsRef.current.push(sim)
-                initialStates.push({ busId: bus._id, busNumber: bus.busNumber, color: route.color, routeNumber: route.routeNumber, etas: [], startTime: sim.startTime })
+                const initState = { busId: bus._id, busNumber: bus.busNumber, color: route.color, routeNumber: route.routeNumber, etas: [], startTime: sim.startTime }
+                latestStatesRef.current[bus._id] = initState
+                initialStates.push(initState)
                 sim.start(100)
             })
 
@@ -322,12 +376,21 @@ export default function FleetMap({ height = '500px' }) {
         } finally {
             setLoading(false)
         }
-    }, [])
+    }, [selectedCity]) // reload map when city changes
 
     useEffect(() => {
         load()
         return () => simsRef.current.forEach(s => s.stop())
     }, [load])
+
+    // Update the UI via a centralized render loop (e.g. at roughly 6 FPS)
+    // This resolves the massive lag caused by firing independent re-renders for every bus update.
+    useEffect(() => {
+        const loop = setInterval(() => {
+            setBusStates(Object.values(latestStatesRef.current))
+        }, 150)
+        return () => clearInterval(loop)
+    }, [])
 
     const toggle = k => setLayers(p => ({ ...p, [k]: !p[k] }))
 
@@ -363,13 +426,10 @@ export default function FleetMap({ height = '500px' }) {
         position: 'relative', width: '100%', height,
         borderRadius: 12, overflow: 'hidden',
         border: '1px solid #2A3347', background: '#0D1117',
-        perspective: layers.perspective ? '1000px' : 'none',
     }
 
     const mapStyle = {
         width: '100%', height: '100%',
-        transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
-        transform: layers.perspective ? 'rotateX(30deg) translateY(-20px)' : 'none',
     }
 
     if (loading) {
@@ -404,19 +464,80 @@ export default function FleetMap({ height = '500px' }) {
                 <span style={{ fontSize: 12, color: '#8B9AB0' }}>
                     {busStates.length} buses · {routes.length} routes
                 </span>
+                <button
+                    onClick={() => {
+                        if (simRunning) {
+                            simsRef.current.forEach(s => s.stop())
+                            setSimRunning(false)
+                        } else {
+                            simsRef.current.forEach(s => s.start(100))
+                            setSimRunning(true)
+                        }
+                    }}
+                    style={{
+                        background: simRunning ? 'rgba(249,168,37,0.15)' : 'rgba(35,196,142,0.15)',
+                        border: `1px solid ${simRunning ? '#F9A825' : '#23C48E'}`,
+                        borderRadius: 6, cursor: 'pointer',
+                        color: simRunning ? '#F9A825' : '#23C48E',
+                        fontSize: 11, fontWeight: 700,
+                        padding: '3px 10px',
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        transition: 'all 0.15s',
+                    }}
+                >
+                    {simRunning ? '⏸ Pause' : '▶ Play'}
+                </button>
                 <button onClick={load} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#4A5568', display: 'flex', padding: 2 }}>
                     <RefreshCw size={12} />
                 </button>
+            </div>
+
+            {/* City Selector */}
+            <div style={{
+                position: 'absolute', top: 12, left: 320, zIndex: 1000,
+                background: 'rgba(22,27,34,0.95)', border: '1px solid #374057',
+                borderRadius: 8, padding: '7px 12px',
+                display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+                <span style={{ fontSize: 11, color: '#8B9AB0', fontWeight: 600, textTransform: 'uppercase' }}>City:</span>
+                <select 
+                    value={selectedCity}
+                    onChange={e => setSelectedCity(e.target.value)}
+                    style={{
+                        background: '#1C2230', border: '1px solid #374057', borderRadius: 4, 
+                        color: '#E8EDF5', fontSize: 13, padding: '4px 8px', outline: 'none',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {availableCities.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                    ))}
+                </select>
             </div>
 
             {/* Layer controls */}
             <div style={{
                 position: 'absolute', bottom: 16, left: 12, zIndex: 1000,
                 background: 'rgba(22,27,34,0.95)', border: '1px solid #374057',
-                borderRadius: 8, padding: '10px 14px',
+                borderRadius: 8, padding: layersMinimized ? '8px 12px' : '10px 14px',
+                width: 200,
+                transition: 'all 0.3s ease'
             }}>
-                <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 8, fontWeight: 600 }}>Layers</div>
-                {Object.entries(layers).map(([k, v]) => <Toggle key={k} label={k} value={v} onChange={() => toggle(k)} />)}
+                <div 
+                    style={{ 
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
+                        cursor: 'pointer', marginBottom: layersMinimized ? 0 : 8 
+                    }}
+                    onClick={() => setLayersMinimized(!layersMinimized)}
+                >
+                    <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700 }}>Layers</div>
+                    <div style={{ color: '#4A5568' }}>
+                        {layersMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </div>
+                </div>
+                {!layersMinimized && (
+                    <>
+                        {Object.entries(layers).map(([k, v]) => <Toggle key={k} label={k} value={v} onChange={() => toggle(k)} />)}
 
                 {/* Speed Control Slider */}
                 <div style={{ height: 1, background: '#2A3347', margin: '8px 0' }} />
@@ -433,17 +554,19 @@ export default function FleetMap({ height = '500px' }) {
                     <span style={{ fontSize: 11, color: '#E8EDF5', width: 45, textAlign: 'right' }}>{globalSpeed} km/h</span>
                 </div>
 
-                {/* Route legend */}
-                {routes.length > 0 && (
-                    <>
-                        <div style={{ height: 1, background: '#2A3347', margin: '8px 0' }} />
-                        <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, fontWeight: 600 }}>Routes</div>
-                        {routes.map(r => (
-                            <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                                <div style={{ width: 20, height: 3, borderRadius: 2, background: r.color, flexShrink: 0 }} />
-                                <span style={{ fontSize: 11, fontWeight: 600, color: r.color }}>{r.routeNumber}</span>
-                            </div>
-                        ))}
+                        {/* Route legend */}
+                        {routes.length > 0 && (
+                            <>
+                                <div style={{ height: 1, background: '#2A3347', margin: '8px 0' }} />
+                                <div style={{ fontSize: 10, color: '#4A5568', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, fontWeight: 600 }}>Routes</div>
+                                {routes.map(r => (
+                                    <div key={r._id} style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+                                        <div style={{ width: 20, height: 3, borderRadius: 2, background: r.color, flexShrink: 0 }} />
+                                        <span style={{ fontSize: 11, fontWeight: 600, color: r.color }}>{r.routeNumber}</span>
+                                    </div>
+                                ))}
+                            </>
+                        )}
                     </>
                 )}
             </div>
@@ -586,7 +709,7 @@ export default function FleetMap({ height = '500px' }) {
                 })}
 
                 {/* Traffic Signals */}
-                {busStates.map(bus => (bus.signals || []).map(sig => {
+                {layers.signals && busStates.map(bus => (bus.signals || []).map(sig => {
                     const sim = simsRef.current.find(s => s.busId === bus.busId)
                     if (!sim || !sim.segs) return null
                     

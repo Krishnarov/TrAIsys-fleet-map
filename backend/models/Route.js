@@ -13,6 +13,10 @@ const routeSchema = new mongoose.Schema(
             unique: true,
             trim: true,
         },
+        cities: [{
+            type: String,
+            trim: true
+        }],
         color: {
             type: String,
             default: '#1D9E75',

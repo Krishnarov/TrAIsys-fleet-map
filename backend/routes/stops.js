@@ -5,9 +5,10 @@ const Stop = require('../models/Stop');
 // GET all stops
 router.get('/', async (req, res) => {
     try {
-        const { isActive } = req.query;
+        const { isActive, city } = req.query;
         const filter = {};
         if (isActive !== undefined) filter.isActive = isActive === 'true';
+        if (city) filter.city = city;
 
         const stops = await Stop.find(filter).sort({ name: 1 });
         res.json({ success: true, count: stops.length, data: stops });

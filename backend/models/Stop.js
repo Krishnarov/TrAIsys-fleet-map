@@ -22,6 +22,12 @@ const stopSchema = new mongoose.Schema(
             type: String,
             trim: true,
         },
+        city: {
+            type: String,
+            required: [true, 'City is required'],
+            trim: true,
+            default: 'Lucknow'
+        },
         isActive: {
             type: Boolean,
             default: true,
