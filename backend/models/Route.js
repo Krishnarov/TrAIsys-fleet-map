@@ -20,7 +20,10 @@ const routeSchema = new mongoose.Schema(
         color: {
             type: String,
             default: '#1D9E75',
-            // hex color for map polyline
+        },
+        cities: {
+            type: [String],
+            default: [],
         },
         stops: [
             {

@@ -284,12 +284,15 @@ export default function FleetMap({ height = '500px' }) {
             // Extract unique cities from routes
             const cities = new Set()
             loadedRoutes.forEach(r => {
-                if (r.cities) r.cities.forEach(c => cities.add(c))
+                if (r.cities && r.cities.length > 0) r.cities.forEach(c => cities.add(c))
             })
-            if (cities.size > 0) setAvailableCities(Array.from(cities))
+            const cityList = Array.from(cities)
+            if (cityList.length > 0) setAvailableCities(cityList)
 
-            // Filter routes to selected city
-            const cityRoutes = loadedRoutes.filter(r => r.cities?.includes(selectedCity))
+            // Filter routes to selected city — if route has no cities field, show in all
+            const cityRoutes = loadedRoutes.filter(r =>
+                !r.cities || r.cities.length === 0 || r.cities.includes(selectedCity)
+            )
             setRoutes(cityRoutes)
 
             // Stop old simulators
