@@ -11,12 +11,6 @@ export default defineConfig({
         target: 'https://tr-a-isys-fleet-map.vercel.app',
         changeOrigin: true,
       },
-      '/socket.io': {
-        target: 'http://localhost:5050',
-//        target: 'https://tr-a-isys-fleet-map.vercel.app',
-        ws: true,
-        changeOrigin: true,
-      }
     },
   },
 })
