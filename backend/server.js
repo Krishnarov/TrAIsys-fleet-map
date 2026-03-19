@@ -32,7 +32,7 @@ connectDB();
 
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173', 'https://traisys-fleet-map.vercel.app'],
+    origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'https://traisys-fleet-map.vercel.app', 'https://traisys-fleet-map.onrender.com'],
     credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
